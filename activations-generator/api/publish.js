@@ -1,15 +1,23 @@
 export default async function handler(req, res) {
-if (req.method !== "POST" && req.method !== "PUT") return res.status(405).end();
-
   res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, PUT, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") return res.status(200).end();
 
-  const { path, content, message } = req.body;
-  const repo = process.env.GITHUB_REPO; // e.g. "Joe-Meier/activations-work"
+  const repo = process.env.GITHUB_REPO;
   const token = process.env.GITHUB_TOKEN;
 
+  if (!repo || !token) {
+    return res.status(500).json({ error: "Missing GITHUB_REPO or GITHUB_TOKEN env vars" });
+  }
+
   try {
-    // Check if file exists (need sha for updates)
+    const { path, content, message } = req.body;
+
+    if (!path || !content) {
+      return res.status(400).json({ error: "Missing path or content" });
+    }
+
     let sha;
     const check = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
       headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
@@ -26,12 +34,16 @@ if (req.method !== "POST" && req.method !== "PUT") return res.status(405).end();
         Accept: "application/vnd.github+json",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ message, content, ...(sha ? { sha } : {}) }),
+      body: JSON.stringify({
+        message: message || `Add case study: ${path}`,
+        content,
+        ...(sha ? { sha } : {}),
+      }),
     });
 
     const data = await response.json();
-    res.status(response.status).json(data);
+    return res.status(response.status).json(data);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    return res.status(500).json({ error: e.message });
   }
 }
