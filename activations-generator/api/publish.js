@@ -18,9 +18,13 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing path or content" });
     }
 
+    // Check if file exists (need sha for updates)
     let sha;
     const check = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+      },
     });
     if (check.ok) {
       const existing = await check.json();
