@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -497,14 +498,16 @@ function App() {
       const encoded = btoa(unescape(encodeURIComponent(html)));
 
       const res = await fetch("/api/publish", {
-        method: "PUT",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ path, content: encoded, message: `Add case study: ${slug}` })
       });
 
+      const resText = await res.text();
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || "Publish failed");
+        let msg = "Publish failed";
+        try { msg = JSON.parse(resText).message || msg; } catch(e) {}
+        throw new Error(msg);
       }
 
       const liveUrl = `https://${ghDomain}/${slug}`;
