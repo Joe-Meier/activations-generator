@@ -497,10 +497,20 @@ function App() {
       const path = `${slug}/index.html`;
       const encoded = btoa(unescape(encodeURIComponent(html)));
 
+      const meta = {
+        slug,
+        client: data.client,
+        campaign: data.campaign,
+        agency: data.agency,
+        tagline: data.tagline,
+        year: data.year,
+        category: data.press?.[0]?.category || "Experiential",
+      };
+
       const res = await fetch("/api/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path, content: encoded, message: `Add case study: ${slug}` })
+        body: JSON.stringify({ path, content: encoded, message: `Add case study: ${slug}`, meta })
       });
 
       const resText = await res.text();
@@ -656,14 +666,21 @@ function App() {
               <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
                 {publishState === "done" ? (
                   <div style={{display:"flex",alignItems:"center",gap:16}}>
-                    <div
-                      className="pub-success-url"
-                      onClick={()=>{navigator.clipboard.writeText(publishedUrl);}}
-                      title="Click to copy"
-                    >
-                      ↗ {publishedUrl}
+                    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                      <a
+                        className="pub-success-url"
+                        href={publishedUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{textDecoration:"none",display:"block"}}
+                      >
+                        ↗ {publishedUrl}
+                      </a>
+                      <span style={{display:"flex",gap:12,alignItems:"center"}}>
+                        <span style={{fontSize:11,color:"var(--muted)"}}>May take ~60s to go live</span>
+                        <span style={{fontSize:11,color:"var(--gold)",cursor:"pointer"}} onClick={()=>navigator.clipboard.writeText(publishedUrl)}>Copy link</span>
+                      </span>
                     </div>
-                    <span style={{fontSize:11,color:"var(--muted)"}}>Click to copy · may take ~60s to go live</span>
                   </div>
                 ) : (
                   <button
