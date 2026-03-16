@@ -11,37 +11,39 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Missing GITHUB_REPO or GITHUB_TOKEN env vars" });
   }
 
+  // Node.js-safe base64 helpers
+  const b64encode = (str) => Buffer.from(str).toString("base64");
+  const b64decode = (str) => Buffer.from(str.replace(/\n/g, ""), "base64").toString("utf8");
+
+  async function getSha(filePath) {
+    const r = await fetch(`https://api.github.com/repos/${repo}/contents/${filePath}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
+    });
+    if (r.ok) { const j = await r.json(); return j.sha; }
+    return null;
+  }
+
+  async function putFile(filePath, fileContent, commitMsg, sha) {
+    return fetch(`https://api.github.com/repos/${repo}/contents/${filePath}`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: commitMsg,
+        content: fileContent,
+        ...(sha ? { sha } : {}),
+      }),
+    });
+  }
+
   try {
     const { path, content, message, meta } = req.body;
 
     if (!path || !content) {
       return res.status(400).json({ error: "Missing path or content" });
-    }
-
-    // Helper: get SHA if file exists
-    async function getSha(filePath) {
-      const r = await fetch(`https://api.github.com/repos/${repo}/contents/${filePath}`, {
-        headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
-      });
-      if (r.ok) { const j = await r.json(); return j.sha; }
-      return null;
-    }
-
-    // Helper: put file to GitHub
-    async function putFile(filePath, fileContent, commitMsg, sha) {
-      return fetch(`https://api.github.com/repos/${repo}/contents/${filePath}`, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/vnd.github+json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: commitMsg,
-          content: fileContent,
-          ...(sha ? { sha } : {}),
-        }),
-      });
     }
 
     // 1. Push the case study HTML
@@ -63,17 +65,16 @@ export default async function handler(req, res) {
         if (indexRes.ok) {
           const indexData = await indexRes.json();
           try {
-            entries = JSON.parse(atob(indexData.content.replace(/\n/g, "")));
+            entries = JSON.parse(b64decode(indexData.content));
           } catch(e) { entries = []; }
         }
       }
 
-      // Remove existing entry for this slug if re-publishing
+      // Remove duplicate if republishing, add new entry at front
       entries = entries.filter(e => e.slug !== meta.slug);
-      // Add new entry at the front
       entries.unshift({ ...meta, publishedAt: new Date().toISOString() });
 
-      const indexContent = btoa(unescape(encodeURIComponent(JSON.stringify(entries, null, 2))));
+      const indexContent = b64encode(JSON.stringify(entries, null, 2));
       await putFile("index.json", indexContent, `Update index: ${meta.slug}`, indexSha);
     }
 
