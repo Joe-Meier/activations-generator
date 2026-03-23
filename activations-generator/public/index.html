@@ -90,6 +90,15 @@ body{font-family:'Barlow',sans-serif;background:var(--ink);color:var(--off-white
 .cs-footer-btn{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:0.25em;text-transform:uppercase;color:var(--muted);cursor:pointer;background:none;border:1px solid rgba(122,120,112,0.3);padding:10px 20px;transition:all 0.2s;}
 .cs-footer-btn:hover{border-color:var(--gold);color:var(--gold);}
 
+/* ── IMAGE UPLOAD ── */
+.img-upload-zone{border:1px dashed var(--border);padding:32px;text-align:center;cursor:pointer;transition:all 0.2s;position:relative;margin:0 80px;}
+.img-upload-zone:hover,.img-upload-zone.drag{border-color:var(--gold);background:rgba(201,168,76,0.04);}
+.img-upload-label{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:0.25em;text-transform:uppercase;color:var(--muted);}
+.img-upload-label em{color:var(--gold);font-style:normal;}
+.img-preview{width:100%;height:220px;object-fit:cover;display:block;}
+.img-clear{position:absolute;top:12px;right:12px;background:rgba(13,13,11,0.8);border:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600;padding:4px 10px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:0.1em;text-transform:uppercase;}
+.img-clear:hover{border-color:var(--gold);color:var(--gold);}
+
 /* ── PUBLISH ── */
 .pub-bar{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(13,13,11,0.96);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 40px;height:56px;display:flex;align-items:center;justify-content:space-between;}
 .pub-bar-left{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:0.25em;text-transform:uppercase;color:var(--muted);}
@@ -252,7 +261,7 @@ function PressCard({ p }) {
 }
 
 /* ─── Build standalone published HTML ───────────────────────────── */
-function buildPublishedHtml(data, slug, domain) {
+function buildPublishedHtml(data, slug, domain, uploadedImage) {
   const esc = s => String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   const campaign = esc(data.campaign||"").replace(/\*([^*]+)\*/g,"<em>$1</em>");
 
@@ -364,14 +373,15 @@ body{font-family:'Barlow',sans-serif;background:var(--ink);color:var(--off-white
   <a class="site-wordmark" href="https://${esc(domain)}">Validated Creative Archive</a>
   <span style="font-size:11px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;letter-spacing:0.15em">${esc(data.year)}</span>
 </header>
-<div class="cs-hero">
-  <div class="eyebrow">
+<div class="cs-hero" style="${uploadedImage ? `background-image:url('${uploadedImage}');background-size:cover;background-position:center;` : ''}">
+  ${uploadedImage ? `<div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(13,13,11,0.92) 0%,rgba(13,13,11,0.4) 60%,rgba(13,13,11,0.2) 100%);pointer-events:none;"></div>` : ''}
+  <div class="eyebrow" style="position:relative">
     <span class="cs-client">${esc(data.client)}</span>
     <span class="dot"></span>
     <span class="cs-year">${esc(data.year)}</span>
   </div>
-  <h1 class="cs-campaign">${campaign}</h1>
-  <div class="cs-meta-row">
+  <h1 class="cs-campaign" style="position:relative">${campaign}</h1>
+  <div class="cs-meta-row" style="position:relative">
     <div><div class="cs-meta-label">Agency</div><div class="cs-meta-value">${esc(data.agency)}</div></div>
     <div><div class="cs-meta-label">Summary</div><div class="cs-meta-value" style="max-width:480px">${esc(data.tagline)}</div></div>
   </div>
@@ -472,7 +482,7 @@ AWARDS INSTRUCTIONS: Generate between 4 and 8 awards total. Make them feel like 
     }
   }
 
-  const reset = () => { setPhase("entry"); setData(null); setIdea(""); setPublishState("idle"); setPublishedUrl(""); };
+  const reset = () => { setPhase("entry"); setData(null); setIdea(""); setPublishState("idle"); setPublishedUrl(""); setUploadedImage(null); };
 
   // ── GitHub publish config ──────────────────────────────────────
   const [showConfig, setShowConfig] = useState(false);
@@ -482,6 +492,32 @@ AWARDS INSTRUCTIONS: Generate between 4 and 8 awards total. Make them feel like 
   const [publishState, setPublishState] = useState("idle"); // idle | publishing | done | error
   const [publishedUrl, setPublishedUrl] = useState("");
   const [publishError, setPublishError] = useState("");
+  const [uploadedImage, setUploadedImage] = useState(null); // base64 data URL
+  const [isDragging, setIsDragging] = useState(false);
+
+  function resizeImage(file, maxW=1400, maxH=900) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+        if (h > maxH) { w = Math.round(w * maxH / h); h = maxH; }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.src = url;
+    });
+  }
+
+  async function handleImageFile(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    const resized = await resizeImage(file);
+    setUploadedImage(resized);
+  }
 
   function slugify(str) {
     return str.toLowerCase()
@@ -497,7 +533,7 @@ AWARDS INSTRUCTIONS: Generate between 4 and 8 awards total. Make them feel like 
     setPublishError("");
     try {
       const slug = slugify(data.campaign || data.client || "case-study");
-      const html = buildPublishedHtml(data, slug, ghDomain);
+      const html = buildPublishedHtml(data, slug, ghDomain, uploadedImage);
       const path = `${slug}/index.html`;
       const encoded = btoa(unescape(encodeURIComponent(html)));
 
@@ -507,7 +543,8 @@ AWARDS INSTRUCTIONS: Generate between 4 and 8 awards total. Make them feel like 
       const imagePrompt = encodeURIComponent(
         `cinematic brand activation campaign photography, dramatic moody lighting, dark background, ${imageKeywords}, award winning, no text, editorial`
       );
-      const imageUrl = `https://image.pollinations.ai/prompt/${imagePrompt}?width=1200&height=800&seed=${Math.abs(slug.split('').reduce((a,c)=>a+c.charCodeAt(0),0))}&nologo=true`;
+      // Use uploaded image if available, otherwise fall back to picsum by index
+      const imageUrl = uploadedImage || null;
 
       const meta = {
         slug,
@@ -671,6 +708,30 @@ AWARDS INSTRUCTIONS: Generate between 4 and 8 awards total. Make them feel like 
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* ── Image Upload Zone ── */}
+            <div className="img-upload-zone"
+              onClick={()=>document.getElementById('img-input').click()}
+              onDragOver={e=>{e.preventDefault();setIsDragging(true);}}
+              onDragLeave={()=>setIsDragging(false)}
+              onDrop={e=>{e.preventDefault();setIsDragging(false);handleImageFile(e.dataTransfer.files[0]);}}
+              style={isDragging?{borderColor:'var(--gold)',background:'rgba(201,168,76,0.06)'}:{}}
+            >
+              <input id="img-input" type="file" accept="image/*" style={{display:'none'}}
+                onChange={e=>handleImageFile(e.target.files[0])}/>
+              {uploadedImage ? (
+                <>
+                  <img src={uploadedImage} className="img-preview" alt="Campaign visual"/>
+                  <button className="img-clear" onClick={e=>{e.stopPropagation();setUploadedImage(null);}}>✕ Remove</button>
+                </>
+              ) : (
+                <div className="img-upload-label">
+                  <div style={{fontSize:28,marginBottom:12,opacity:0.3}}>↑</div>
+                  Drop an image or <em>click to upload</em>
+                  <div style={{marginTop:6,fontSize:10,opacity:0.5}}>Optional — adds a cover photo to your case study. Any size, auto-resized.</div>
+                </div>
+              )}
             </div>
 
             <div className="cs-footer">
